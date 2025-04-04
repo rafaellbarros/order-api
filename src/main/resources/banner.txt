@@ -1,0 +1,11 @@
+                 .___                                   .__
+  ___________  __| _/___________          _____  ______ |__|
+ /  _ \_  __ \/ __ |/ __ \_  __ \  ______ \__  \ \____ \|  |
+(  <_> )  | \/ /_/ \  ___/|  | \/ /_____/  / __ \|  |_> >  |
+ \____/|__|  \____ |\___  >__|            (____  /   __/|__|
+                  \/    \/                     \/|__|
+Welcome to the Order Api Application!
+Application Name: ${application.title}
+Application Version: ${application.version}
+Application Profile: ${application.profile}
+Powered by Spring Boot ${spring-boot.version}

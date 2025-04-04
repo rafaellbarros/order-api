@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: order-api
+  profiles:
+    default: local
+
+server:
+  port: 8080
+  servlet:
+    context-path: /order-api
+
+# banner
+application:
+  title: ${spring.application.name}
+  version: @project.version@
+  profile: ${spring.profiles.active:${spring.profiles.default}}
+
