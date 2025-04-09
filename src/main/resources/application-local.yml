@@ -10,5 +10,32 @@ spring:
     ansi:
       enabled: ALWAYS
 
+order:
+  processor:
+    schedule: "0 */3 * * * *" # a cada 3 minutos
+
 server:
   port: 8082
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui
+  show-actuator: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+  server:
+    port: 8082
+
+
+
