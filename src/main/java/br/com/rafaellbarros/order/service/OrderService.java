@@ -5,7 +5,6 @@ import br.com.rafaellbarros.order.domain.OrderStatus;
 import br.com.rafaellbarros.order.repository.OrderRepository;
 import br.com.rafaellbarros.order.service.helper.OrderFactory;
 import br.com.rafaellbarros.order.service.helper.OrderLogger;
-import br.com.rafaellbarros.order.service.helper.OrderValidator;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,24 +24,20 @@ import java.util.Optional;
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    private final OrderValidator validator;
     private final OrderFactory factory;
     private final OrderLogger orderLogger;
 
     public Order receive(final Order request) {
-        validator.validate(request);
 
-        orderRepository.findByExternalId(request.getExternalId())
-                .ifPresent(o -> {
-                    orderLogger.logDuplicate(request.getExternalId());
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Pedido duplicado externalId: " + request.getExternalId());
-                });
+        validateDuplicated(request);
 
         Order order = factory.createOrder(request);
         Order saved = orderRepository.save(order);
         orderLogger.logSavedOrder(order);
         return saved;
     }
+
+
 
     public List<Order> receiveAll(@Valid List<Order> listRequest) {
 
@@ -51,19 +46,7 @@ public class OrderService {
         }
 
         List<Order> validOrders = listRequest.stream()
-                .map(request -> {
-                    try {
-                        validator.validate(request);
-                        if (orderRepository.findByExternalId(request.getExternalId()).isPresent()) {
-                            orderLogger.logDuplicateIgnored(request.getExternalId());
-                            return null;
-                        }
-                        return factory.createOrder(request);
-                    } catch (ResponseStatusException ex) {
-                        orderLogger.logInvalidIgnored(request.getExternalId(), ex.getReason());
-                        return null;
-                    }
-                })
+                .map(this::getOrder)
                 .filter(Objects::nonNull)
                 .toList();
 
@@ -75,6 +58,8 @@ public class OrderService {
         log.info("{} pedido(s) salvo(s) com sucesso.", savedOrders.size());
         return savedOrders;
     }
+
+
 
     public Optional<Order> getOrderByEsternalId(final String id) {
         orderLogger.logSearchByExternalId(id);
@@ -90,5 +75,26 @@ public class OrderService {
         List<Order> orders = orderRepository.findByStatus(status);
         log.info("{} pedido(s) encontrado(s) com status {}", orders.size(), status);
         return orders;
+    }
+
+    private Order getOrder(final Order request) {
+        try {
+            if (orderRepository.findByExternalId(request.getExternalId()).isPresent()) {
+                orderLogger.logDuplicateIgnored(request.getExternalId());
+                return null;
+            }
+            return factory.createOrder(request);
+        } catch (ResponseStatusException ex) {
+            orderLogger.logInvalidIgnored(request.getExternalId(), ex.getReason());
+            return null;
+        }
+    }
+
+    private void validateDuplicated(Order request) {
+        orderRepository.findByExternalId(request.getExternalId())
+                .ifPresent(o -> {
+                    orderLogger.logDuplicate(request.getExternalId());
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Pedido duplicado externalId: " + request.getExternalId());
+                });
     }
 }

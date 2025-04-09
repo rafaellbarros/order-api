@@ -1,13 +1,11 @@
 package br.com.rafaellbarros.order.service;
 
 import br.com.rafaellbarros.order.domain.Order;
-import br.com.rafaellbarros.order.domain.OrderStatus;
 import br.com.rafaellbarros.order.domain.OrderItem;
-import br.com.rafaellbarros.order.repository.OrderItemRepository;
+import br.com.rafaellbarros.order.domain.OrderStatus;
 import br.com.rafaellbarros.order.repository.OrderRepository;
 import br.com.rafaellbarros.order.service.helper.OrderFactory;
 import br.com.rafaellbarros.order.service.helper.OrderLogger;
-import br.com.rafaellbarros.order.service.helper.OrderValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,8 +38,6 @@ class OrderServiceTest {
     @Mock
     private OrderRepository repository;
 
-    @Mock
-    private OrderValidator validator;
 
     @Mock
     private OrderFactory factory;
@@ -82,7 +78,6 @@ class OrderServiceTest {
         assertNotNull(result);
         assertEquals(OrderStatus.RECEIVED, result.getStatus());
         assertEquals("order-123", result.getExternalId());
-        then(validator).should().validate(validOrder);
         then(repository).should().findByExternalId("order-123");
         then(factory).should().createOrder(validOrder);
         then(repository).should().save(validOrder);
@@ -102,21 +97,6 @@ class OrderServiceTest {
         then(repository).should(never()).save(any());
     }
 
-    @Test
-    void shouldThrowBadRequestWhenOrderHasNoProducts() {
-        Order orderWithoutProducts = new Order();
-        orderWithoutProducts.setExternalId("order-456");
-
-        willThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pedido sem itens"))
-                .given(validator).validate(orderWithoutProducts);
-
-        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> orderService.receive(orderWithoutProducts));
-
-        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
-        then(repository).should(never()).save(any());
-        then(orderLogger).should(never()).logSavedOrder(any());
-    }
 
     @Test
     void shouldReceiveAllOrdersSuccessfully() {
@@ -132,7 +112,6 @@ class OrderServiceTest {
         List<Order> savedOrders = orderService.receiveAll(List.of(validOrder, order2));
 
         assertEquals(2, savedOrders.size());
-        then(validator).should(times(2)).validate(any());
         then(factory).should(times(2)).createOrder(any());
         then(repository).should(times(2)).findByExternalId(anyString());
         then(repository).should().saveAll(anyList());
@@ -148,14 +127,15 @@ class OrderServiceTest {
         validOrder.setExternalId("order-123");
 
 
-        willThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pedido inválido"))
-                .given(validator)
-                .validate(argThat(order ->
-                        order != null && "order-invalid".equals(order.getExternalId())
-                ));
-
         given(repository.findByExternalId("order-123")).willReturn(Optional.empty());
         given(factory.createOrder(validOrder)).willReturn(validOrder);
+
+
+        willThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pedido inválido"))
+                .given(factory)
+                .createOrder(argThat(order -> "order-invalid".equals(order.getExternalId())));
+
+
         given(repository.saveAll(anyList())).willAnswer(invocation -> invocation.getArgument(0));
 
         List<Order> saved = orderService.receiveAll(List.of(validOrder, invalidOrder));
@@ -167,8 +147,10 @@ class OrderServiceTest {
         then(factory).should(times(1)).createOrder(validOrder);
     }
 
+
+
     @Test
-    void shouldThrowConflictWhenAllOrdersInvalidOrDuplicated() {
+    void shouldThrowConflictWhenAllOrdersDuplicated() {
         Order duplicatedOrder = new Order();
         duplicatedOrder.setExternalId("123");
 
@@ -176,7 +158,6 @@ class OrderServiceTest {
         when(repository.findByExternalId(any())).thenReturn(Optional.of(duplicatedOrder));
 
 
-        doNothing().when(validator).validate(any());
 
         List<Order> list = List.of(duplicatedOrder, duplicatedOrder);
 
