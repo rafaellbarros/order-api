@@ -25,6 +25,10 @@ public class OrderProcessor {
     private final OrderRepository repository;
     private final MeterRegistry meterRegistry;
 
+    private Counter successCounter;
+    private Counter errorCounter;
+    private Timer processingTimer;
+
     @PostConstruct
     public void initMetrics() {
         successCounter = meterRegistry.counter("order_processor_processed_total");
@@ -34,13 +38,10 @@ public class OrderProcessor {
                 .register(meterRegistry);
     }
 
-    private Counter successCounter;
-    private Counter errorCounter;
-    private Timer processingTimer;
-
     @Scheduled(cron = "${order.processor.schedule}")
     public void process() {
         processingTimer.record(() -> {
+
             List<Order> receivedOrders = repository.findByStatus(OrderStatus.RECEIVED);
 
             if (receivedOrders.isEmpty()) {
@@ -48,15 +49,15 @@ public class OrderProcessor {
                 return;
             }
 
-            log.info("🔄 Iniciando processamento de {} pedidos RECEIVED", receivedOrders.size());
+            log.info("Iniciando processamento de {} pedidos RECEIVED", receivedOrders.size());
 
             List<Order> processedOrders = receivedOrders.stream()
                     .map(this::processOrderSafely)
                     .toList();
 
             repository.saveAll(processedOrders);
+            log.info("Finalizado processamento de {} pedidos.", processedOrders.size());
 
-            log.info("✅ Finalizado processamento de {} pedidos.", processedOrders.size());
         });
     }
 
@@ -70,24 +71,21 @@ public class OrderProcessor {
 
             successCounter.increment();
 
-            log.info("📦 [{}] Pedido {} processado com sucesso. Total R$ {}", order.getTraceId(), order.getExternalId(), totalAmount);
-
+            log.info("[{}] Pedido {} processado com sucesso. Total R$ {}", order.getTraceId(), order.getExternalId(), totalAmount);
         } catch (Exception e) {
             order.setStatus(OrderStatus.FAILED);
             order.setProcessingMessage("Erro: " + e.getMessage());
             errorCounter.increment();
-
-            log.error("❌ [{}] Erro ao processar pedido {}: {}", order.getTraceId(), order.getExternalId(), e.getMessage(), e);
+            log.error("[{}] Erro ao processar pedido {}: {}", order.getTraceId(), order.getExternalId(), e.getMessage(), e);
         }
 
         return order;
     }
 
     private BigDecimal calculateTotalAmount(Order order) {
-        BigDecimal total = order.getItems().stream()
+        return order.getItems().stream()
                 .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        return total.setScale(2, RoundingMode.HALF_UP);
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
     }
 }
