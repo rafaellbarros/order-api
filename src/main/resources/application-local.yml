@@ -24,7 +24,7 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui
-  show-actuator: true
+  show-actuator: false
 
 management:
   endpoints:
