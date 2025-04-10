@@ -31,56 +31,58 @@ public class OrderControllerTest {
     @InjectMocks
     private OrderController orderController;
 
-
     @Test
-    void testReceive() {
+    void testCreateOrder() {
         Order request = buildOrder();
-        when(orderService.receive(request)).thenReturn(request);
+        when(orderService.createOrder(request)).thenReturn(request);
 
         ResponseEntity<Order> response = orderController.receive(request);
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
         assertEquals(request, response.getBody());
-        verify(orderService).receive(request);
+        assertTrue(response.getHeaders().getLocation().toString().contains("/v1/orders/" + request.getId()));
+        verify(orderService).createOrder(request);
     }
 
     @Test
-    void testReceiveAll() {
+    void testCreateOrders() {
         Order order1 = buildOrder();
         Order order2 = buildOrder();
-        order2.setExternalId("order-123"); // muda para não ser duplicado
+        order2.setExternalId("order-456");
 
         List<Order> requestList = List.of(order1, order2);
-        when(orderService.receiveAll(requestList)).thenReturn(requestList);
+        when(orderService.createOrders(requestList)).thenReturn(requestList);
 
-        ResponseEntity<List<Order>> response = orderController.receiveAll(requestList);
+        ResponseEntity<List<Order>> response = orderController.createOrders(requestList);
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
         assertEquals(2, response.getBody().size());
-        verify(orderService).receiveAll(requestList);
+        assertEquals(requestList, response.getBody());
+        assertTrue(response.getHeaders().getLocation().toString().contains("/v1/orders/batch"));
+        verify(orderService).createOrders(requestList);
     }
 
     @Test
-    void testGetOrderByEsternalIdFound() {
+    void testGetOrderByExternalIdFound() {
         Order order = buildOrder();
-        when(orderService.getOrderByEsternalId("order-123")).thenReturn(Optional.of(order));
+        when(orderService.getOrderByExternalId("order-123")).thenReturn(Optional.of(order));
 
-        ResponseEntity<Order> response = orderController.getOrderByEsternalId("order-123");
+        ResponseEntity<Order> response = orderController.getOrderByExternalId("order-123");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(order, response.getBody());
-        verify(orderService).getOrderByEsternalId("order-123");
+        verify(orderService).getOrderByExternalId("order-123");
     }
 
     @Test
-    void testGetOrderByEsternalIdNotFound() {
-        when(orderService.getOrderByEsternalId("not-exist")).thenReturn(Optional.empty());
+    void testGetOrderByExternalIdNotFound() {
+        when(orderService.getOrderByExternalId("not-exist")).thenReturn(Optional.empty());
 
-        ResponseEntity<Order> response = orderController.getOrderByEsternalId("not-exist");
+        ResponseEntity<Order> response = orderController.getOrderByExternalId("not-exist");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         assertNull(response.getBody());
-        verify(orderService).getOrderByEsternalId("not-exist");
+        verify(orderService).getOrderByExternalId("not-exist");
     }
 
     @Test
@@ -97,7 +99,6 @@ public class OrderControllerTest {
         assertEquals(2, response.getBody().size());
         verify(orderService).getOrdersByStatus(OrderStatus.RECEIVED);
     }
-
 
     private Order buildOrder() {
         OrderItem item = new OrderItem("Notebook", new BigDecimal("3500.00"), 1);
