@@ -63,7 +63,7 @@ java -jar build/libs/order-api.jar
 #### 💻 cURL
 ```bash
 curl -X POST \
-  'http://localhost:8082/order-api/orders/receive' \
+  'http://localhost:8082/order-api/v1/orders' \
   -H 'accept: */*' \
   -H 'Content-Type: application/json' \
   -d '{
@@ -118,7 +118,7 @@ curl -X POST \
 #### 💻 cURL
 ```bash
 curl -X POST \
-  'http://localhost:8082/order-api/orders/receive/all' \
+  'http://localhost:8082/order-api/v1/orders/batch' \
   -H 'accept: */*' \
   -H 'Content-Type: application/json' \
   -d '[
@@ -148,7 +148,7 @@ curl -X POST \
 #### 💻 cURL
 ```bash
 curl -X GET \
-  'http://localhost:8082/order-api/orders/externalId/ext-123406' \
+  'http://localhost:8082/order-api/v1/orders/external-id/ext-123406' \
   -H 'accept: */*'
 ```
 
@@ -159,6 +159,6 @@ curl -X GET \
 #### 💻 cURL
 ```bash
 curl -X GET \
-  'http://localhost:8082/order-api/orders/status/CALCULATED' \
+  'http://localhost:8082/order-api/v1/orders/by-status/CALCULATED' \
   -H 'accept: */*'
 ```
