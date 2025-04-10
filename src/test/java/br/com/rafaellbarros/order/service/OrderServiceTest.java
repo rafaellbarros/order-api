@@ -3,9 +3,10 @@ package br.com.rafaellbarros.order.service;
 import br.com.rafaellbarros.order.domain.Order;
 import br.com.rafaellbarros.order.domain.OrderItem;
 import br.com.rafaellbarros.order.domain.OrderStatus;
+import br.com.rafaellbarros.order.factory.OrderFactory;
+import br.com.rafaellbarros.order.logger.OrderLogger;
+import br.com.rafaellbarros.order.repository.OrderItemRepository;
 import br.com.rafaellbarros.order.repository.OrderRepository;
-import br.com.rafaellbarros.order.service.helper.OrderFactory;
-import br.com.rafaellbarros.order.service.helper.OrderLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,11 +37,13 @@ import static org.mockito.Mockito.times;
 class OrderServiceTest {
 
     @Mock
-    private OrderRepository repository;
-
+    private OrderRepository orderRepository;
 
     @Mock
-    private OrderFactory factory;
+    private OrderItemRepository orderItemRepository;
+
+    @Mock
+    private OrderFactory orderFactory;
 
     @Mock
     private OrderLogger orderLogger;
@@ -68,84 +71,92 @@ class OrderServiceTest {
     }
 
     @Test
-    void shouldReceiveOrderSuccessfully() {
-        given(repository.findByExternalId("order-123")).willReturn(Optional.empty());
-        given(factory.createOrder(validOrder)).willReturn(validOrder);
-        given(repository.save(validOrder)).willReturn(validOrder);
+    void shouldCreateOrderSuccessfully() {
+        given(orderRepository.findByExternalId("order-123")).willReturn(Optional.empty());
+        given(orderItemRepository.saveAll(validOrder.getItems())).willReturn(validOrder.getItems());
+        given(orderFactory.createFrom(validOrder)).willReturn(validOrder);
+        given(orderRepository.save(validOrder)).willReturn(validOrder);
 
-        Order result = orderService.receive(validOrder);
+        Order result = orderService.createOrder(validOrder);
 
         assertNotNull(result);
         assertEquals(OrderStatus.RECEIVED, result.getStatus());
         assertEquals("order-123", result.getExternalId());
-        then(repository).should().findByExternalId("order-123");
-        then(factory).should().createOrder(validOrder);
-        then(repository).should().save(validOrder);
-        then(orderLogger).should().logSavedOrder(validOrder);
+        then(orderRepository).should().findByExternalId("order-123");
+        then(orderItemRepository).should().saveAll(validOrder.getItems());
+        then(orderLogger).should().sevedItems(validOrder.getItems());
+        then(orderFactory).should().createFrom(validOrder);
+        then(orderRepository).should().save(validOrder);
+        then(orderLogger).should().saved(validOrder);
     }
 
     @Test
     void shouldThrowConflictWhenOrderIsDuplicated() {
-        given(repository.findByExternalId("order-123")).willReturn(Optional.of(validOrder));
+        given(orderRepository.findByExternalId("order-123")).willReturn(Optional.of(validOrder));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> orderService.receive(validOrder));
+                () -> orderService.createOrder(validOrder));
 
         assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
-        then(orderLogger).should().logDuplicate("order-123");
-        then(factory).should(never()).createOrder(any());
-        then(repository).should(never()).save(any());
+        then(orderLogger).should().duplicated("order-123");
+        then(orderItemRepository).shouldHaveNoInteractions();
+        then(orderFactory).shouldHaveNoInteractions();
+        then(orderRepository).should(never()).save(any());
     }
 
-
     @Test
-    void shouldReceiveAllOrdersSuccessfully() {
+    void shouldCreateAllValidOrdersSuccessfully() {
         Order order2 = new Order();
         order2.setExternalId("order-456");
         order2.setItems(List.of(item));
 
-        given(repository.findByExternalId(anyString())).willReturn(Optional.empty());
-        given(factory.createOrder(validOrder)).willReturn(validOrder);
-        given(factory.createOrder(order2)).willReturn(order2);
-        given(repository.saveAll(anyList())).willAnswer(invocation -> invocation.getArgument(0));
+        given(orderRepository.findByExternalId(anyString())).willReturn(Optional.empty());
+        given(orderItemRepository.saveAll(anyList())).willReturn(List.of(item));
+        given(orderFactory.createFrom(any(Order.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(orderRepository.saveAll(anyList())).willAnswer(invocation -> invocation.getArgument(0));
 
-        List<Order> savedOrders = orderService.receiveAll(List.of(validOrder, order2));
+        List<Order> savedOrders = orderService.createOrders(List.of(validOrder, order2));
 
         assertEquals(2, savedOrders.size());
-        then(factory).should(times(2)).createOrder(any());
-        then(repository).should(times(2)).findByExternalId(anyString());
-        then(repository).should().saveAll(anyList());
+        then(orderRepository).should(times(2)).findByExternalId(anyString());
+        then(orderItemRepository).should(times(2)).saveAll(anyList());
+        then(orderFactory).should(times(2)).createFrom(any(Order.class));
+        then(orderRepository).should().saveAll(anyList());
+        then(orderLogger).should().savedOrders(savedOrders);
     }
 
     @Test
-    void shouldIgnoreInvalidOrdersInReceiveAll() {
+    void shouldIgnoreOrderWhenResponseStatusExceptionOccurs() {
+        Order order = new Order();
+        order.setExternalId("order-123");
+        order.setItems(List.of(new OrderItem()));
 
-        Order invalidOrder = new Order();
-        invalidOrder.setExternalId("order-invalid");
+        given(orderRepository.findByExternalId("order-123")).willReturn(Optional.empty());
+        given(orderItemRepository.saveAll(order.getItems()))
+                .willThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dados inválidos"));
 
-        Order validOrder = new Order();
-        validOrder.setExternalId("order-123");
+        Optional<Order> result = orderService.createFromIfValid(order);
 
-
-        given(repository.findByExternalId("order-123")).willReturn(Optional.empty());
-        given(factory.createOrder(validOrder)).willReturn(validOrder);
-
-
-        willThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pedido inválido"))
-                .given(factory)
-                .createOrder(argThat(order -> "order-invalid".equals(order.getExternalId())));
-
-
-        given(repository.saveAll(anyList())).willAnswer(invocation -> invocation.getArgument(0));
-
-        List<Order> saved = orderService.receiveAll(List.of(validOrder, invalidOrder));
-
-        assertEquals(1, saved.size());
-        assertEquals("order-123", saved.get(0).getExternalId());
-
-        then(orderLogger).should().logInvalidIgnored(eq("order-invalid"), anyString());
-        then(factory).should(times(1)).createOrder(validOrder);
+        assertTrue(result.isEmpty());
+        then(orderLogger).should().invalidIgnored("order-123", "Dados inválidos");
     }
+
+    @Test
+    void shouldIgnoreOrderWhenUnexpectedRuntimeExceptionOccurs() {
+        Order order = new Order();
+        order.setExternalId("order-456");
+        order.setItems(List.of(new OrderItem()));
+
+        given(orderRepository.findByExternalId("order-456")).willReturn(Optional.empty());
+        given(orderItemRepository.saveAll(order.getItems()))
+                .willThrow(new NullPointerException("Erro simulado"));
+
+        Optional<Order> result = orderService.createFromIfValid(order);
+
+        assertTrue(result.isEmpty());
+        then(orderLogger).should().invalidIgnored("order-456", "Erro inesperado: NullPointerException");
+    }
+
 
 
 
@@ -154,43 +165,38 @@ class OrderServiceTest {
         Order duplicatedOrder = new Order();
         duplicatedOrder.setExternalId("123");
 
-
-        when(repository.findByExternalId(any())).thenReturn(Optional.of(duplicatedOrder));
-
-
+        when(orderRepository.findByExternalId(any())).thenReturn(Optional.of(duplicatedOrder));
 
         List<Order> list = List.of(duplicatedOrder, duplicatedOrder);
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> orderService.receiveAll(list));
+                () -> orderService.createOrders(list));
 
         assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
         assertEquals("Nenhum pedido válido para processar", ex.getReason());
     }
 
-
     @Test
     void shouldReturnOrderWhenExternalIdExists() {
-        given(repository.findByExternalId("order-123")).willReturn(Optional.of(validOrder));
+        given(orderRepository.findByExternalId("order-123")).willReturn(Optional.of(validOrder));
 
-        Optional<Order> result = orderService.getOrderByEsternalId("order-123");
+        Optional<Order> result = orderService.getOrderByExternalId("order-123");
 
         assertTrue(result.isPresent());
         assertEquals("order-123", result.get().getExternalId());
 
-        then(orderLogger).should().logSearchByExternalId("order-123");
-        then(orderLogger).should().logFound("1");
+        then(orderLogger).should().searchByExternalId("order-123");
+        then(orderLogger).should().found("1");
     }
 
     @Test
     void shouldReturnEmptyWhenExternalIdNotFound() {
-        given(repository.findByExternalId("not-found")).willReturn(Optional.empty());
+        given(orderRepository.findByExternalId("not-found")).willReturn(Optional.empty());
 
-        Optional<Order> result = orderService.getOrderByEsternalId("not-found");
+        Optional<Order> result = orderService.getOrderByExternalId("not-found");
 
         assertTrue(result.isEmpty());
-        then(orderLogger).should().logSearchByExternalId("not-found");
-        then(orderLogger).should(never()).logFound(anyString());
+        then(orderLogger).shouldHaveNoInteractions(); // Nenhum log em Optional.empty()
     }
 
     @Test
@@ -198,7 +204,7 @@ class OrderServiceTest {
         OrderStatus status = OrderStatus.RECEIVED;
         List<Order> mockOrders = List.of(validOrder);
 
-        given(repository.findByStatus(status)).willReturn(mockOrders);
+        given(orderRepository.findByStatus(status)).willReturn(mockOrders);
 
         List<Order> result = orderService.getOrdersByStatus(status);
 
@@ -209,7 +215,7 @@ class OrderServiceTest {
     @Test
     void shouldReturnEmptyListWhenNoOrdersWithStatus() {
         OrderStatus status = OrderStatus.RECEIVED;
-        given(repository.findByStatus(status)).willReturn(Collections.emptyList());
+        given(orderRepository.findByStatus(status)).willReturn(Collections.emptyList());
 
         List<Order> result = orderService.getOrdersByStatus(status);
 
@@ -218,11 +224,11 @@ class OrderServiceTest {
     }
 
     @Test
-    void shouldThrowExceptionWhenReceiveAllWithEmptyList() {
+    void shouldThrowExceptionWhenCreateOrdersWithEmptyList() {
         List<Order> emptyList = Collections.emptyList();
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class, () ->
-                orderService.receiveAll(emptyList)
+                orderService.createOrders(emptyList)
         );
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
