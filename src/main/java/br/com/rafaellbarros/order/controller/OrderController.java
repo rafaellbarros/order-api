@@ -5,40 +5,47 @@ import br.com.rafaellbarros.order.domain.OrderStatus;
 import br.com.rafaellbarros.order.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URI;
 import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/orders")
+@RequestMapping("/v1/orders")
 public class OrderController {
 
-    private final OrderService service;
+    private final OrderService orderService;
 
-    @PostMapping("/receive")
+    @PostMapping
     public ResponseEntity<Order> receive(final @RequestBody @Valid Order request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.receive(request));
+        var createdOrder = orderService.createOrder(request);
+        return ResponseEntity
+                .created(URI.create("/v1/orders/" + createdOrder.getId()))
+                .body(createdOrder);
     }
 
-    @PostMapping("/receive/all")
-    public ResponseEntity<List<Order>> receiveAll(final @RequestBody @Valid List<Order> listRequest) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.receiveAll(listRequest));
+    @PostMapping("/batch")
+    public ResponseEntity<List<Order>> createOrders(@RequestBody @Valid List<Order> requests) {
+        List<Order> createdOrders = orderService.createOrders(requests);
+        return ResponseEntity
+                .created(URI.create("/v1/orders/batch"))
+                .body(createdOrders);
     }
 
 
-    @GetMapping("/externalId/{id}")
-    public ResponseEntity<Order> getOrderByEsternalId(@PathVariable final String id) {
-        return service.getOrderByEsternalId(id)
+    @GetMapping("/external-id/{externalId}")
+    public ResponseEntity<Order> getOrderByExternalId(@PathVariable String externalId) {
+        return orderService.getOrderByExternalId(externalId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/status/{status}")
-    public ResponseEntity<List<Order>> getOrdersByStatus(@PathVariable final OrderStatus status) {
-        return ResponseEntity.status(HttpStatus.OK).body(service.getOrdersByStatus(status));
+    @GetMapping("/by-status/{status}")
+    public ResponseEntity<List<Order>> getOrdersByStatus(@PathVariable OrderStatus status) {
+        return ResponseEntity.ok(orderService.getOrdersByStatus(status));
     }
+
 
 }
