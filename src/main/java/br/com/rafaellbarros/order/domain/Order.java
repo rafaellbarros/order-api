@@ -3,20 +3,23 @@ package br.com.rafaellbarros.order.domain;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 
-@Getter
-@Setter
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Document(collection = "orders")
 public class Order {
 
@@ -29,7 +32,7 @@ public class Order {
 
     @Valid
     @NotEmpty(message = "Lista de itens não pode estar vazia")
-    private List<OrderItem> items = new ArrayList<>();
+    private List<OrderItem> items;
 
     private OrderStatus status;
     private BigDecimal totalAmount;
