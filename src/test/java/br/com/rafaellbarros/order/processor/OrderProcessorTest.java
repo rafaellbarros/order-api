@@ -4,6 +4,7 @@ import br.com.rafaellbarros.order.domain.Order;
 import br.com.rafaellbarros.order.domain.OrderStatus;
 import br.com.rafaellbarros.order.domain.OrderItem;
 import br.com.rafaellbarros.order.repository.OrderRepository;
+import br.com.rafaellbarros.order.service.OrderProcessorService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,13 +33,12 @@ class OrderProcessorTest {
     @BeforeEach
     void setup() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        orderProcessor = new OrderProcessor(repository, meterRegistry);
-        orderProcessor.initMetrics();
+        var orderProcessorService = new OrderProcessorService(meterRegistry);
+        orderProcessor = new OrderProcessor(orderProcessorService, repository);
     }
 
     @Test
     void shouldProcessReceivedOrdersSuccessfully() {
-
         OrderItem item1 = new OrderItem("Camiseta", new BigDecimal("50.00"), 2);
         OrderItem item2 = new OrderItem("Tênis", new BigDecimal("100.00"), 3);
 
@@ -51,8 +51,7 @@ class OrderProcessorTest {
         given(repository.findByStatus(OrderStatus.RECEIVED)).willReturn(List.of(order));
         given(repository.saveAll(anyList())).willReturn(List.of(order));
 
-
-        orderProcessor.process();
+        orderProcessor.processScheduledOrders();
 
 
         verify(repository).saveAll(argThat(orders -> {
@@ -63,38 +62,30 @@ class OrderProcessorTest {
             }
             return false;
         }));
-
-
     }
 
     @Test
     void shouldSkipProcessingWhenNoReceivedOrders() {
-
         given(repository.findByStatus(OrderStatus.RECEIVED)).willReturn(Collections.emptyList());
 
-
-        orderProcessor.process();
-
+        orderProcessor.processScheduledOrders();
 
         verify(repository, never()).saveAll(any());
     }
 
     @Test
     void shouldHandleExceptionDuringProcessing() {
-
         OrderItem item = new OrderItem("Bugado", null, 0);
 
         Order order = new Order();
         order.setExternalId("FAIL-123");
-        order.setStatus(OrderStatus.FAILED);
+        order.setStatus(OrderStatus.RECEIVED);
         order.setItems(List.of(item));
         order.setTraceId(UUID.randomUUID().toString());
 
         given(repository.findByStatus(OrderStatus.RECEIVED)).willReturn(List.of(order));
 
-
-        orderProcessor.process();
-
+        orderProcessor.processScheduledOrders();
 
         verify(repository).saveAll(argThat(orders -> {
             for (Order o : orders) {
@@ -103,6 +94,5 @@ class OrderProcessorTest {
             }
             return false;
         }));
-
     }
 }

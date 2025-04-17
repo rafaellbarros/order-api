@@ -49,7 +49,7 @@ public class OrderService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lista de pedidos não pode estar vazia");
         }
 
-        List<Order> validOrders = requests.stream()
+        var validOrders = requests.stream()
                 .map(this::createFromIfValid)
                 .flatMap(Optional::stream)
                 .toList();
