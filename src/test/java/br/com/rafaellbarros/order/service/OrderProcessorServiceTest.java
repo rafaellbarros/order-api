@@ -3,6 +3,7 @@ package br.com.rafaellbarros.order.service;
 import br.com.rafaellbarros.order.domain.Order;
 import br.com.rafaellbarros.order.domain.OrderItem;
 import br.com.rafaellbarros.order.domain.OrderStatus;
+import br.com.rafaellbarros.order.logger.OrderProcessorLogger;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,8 @@ class OrderProcessorServiceTest {
     @BeforeEach
     void setUp() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        service = new OrderProcessorService(registry);
+        OrderProcessorLogger logger = new OrderProcessorLogger();
+        service = new OrderProcessorService(registry, logger);
     }
 
     @Test

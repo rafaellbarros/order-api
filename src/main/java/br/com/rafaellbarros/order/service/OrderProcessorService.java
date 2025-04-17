@@ -2,6 +2,7 @@ package br.com.rafaellbarros.order.service;
 
 import br.com.rafaellbarros.order.domain.Order;
 import br.com.rafaellbarros.order.domain.OrderStatus;
+import br.com.rafaellbarros.order.logger.OrderProcessorLogger;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -20,13 +21,15 @@ public class OrderProcessorService {
     private final Counter successCounter;
     private final Counter errorCounter;
     private final Timer processingTimer;
+    private final OrderProcessorLogger logger;
 
-    public OrderProcessorService(MeterRegistry meterRegistry) {
+    public OrderProcessorService(MeterRegistry meterRegistry, OrderProcessorLogger logger) {
         this.successCounter = meterRegistry.counter("order_processor_processed_total");
         this.errorCounter = meterRegistry.counter("order_processor_errors_total");
         this.processingTimer = Timer.builder("order_processor_duration_seconds")
                 .description("Duração do processamento dos pedidos")
                 .register(meterRegistry);
+        this.logger = logger;
     }
 
     public List<Order> processOrders(List<Order> orders) {
@@ -48,17 +51,14 @@ public class OrderProcessorService {
 
             successCounter.increment();
 
-            log.info("[{}] Pedido {} processado com sucesso. Total R$ {}",
-                    order.getTraceId(), order.getExternalId(), totalAmount);
+            logger.processedSuccessfully(order);
 
-        } catch (Exception e) {
+        } catch (Exception ex) {
             order.setStatus(OrderStatus.FAILED);
-            order.setProcessingMessage("Erro: " + e.getMessage());
+            order.setProcessingMessage("Erro: " + ex.getMessage());
 
             errorCounter.increment();
-
-            log.error("[{}] Erro ao processar pedido {}: {}",
-                    order.getTraceId(), order.getExternalId(), e.getMessage(), e);
+            logger.errorProcessing(order, ex);
         }
 
         return order;

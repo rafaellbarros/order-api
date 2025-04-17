@@ -3,6 +3,7 @@ package br.com.rafaellbarros.order.processor;
 import br.com.rafaellbarros.order.domain.Order;
 import br.com.rafaellbarros.order.domain.OrderStatus;
 import br.com.rafaellbarros.order.domain.OrderItem;
+import br.com.rafaellbarros.order.logger.OrderProcessorLogger;
 import br.com.rafaellbarros.order.repository.OrderRepository;
 import br.com.rafaellbarros.order.service.OrderProcessorService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -32,9 +33,10 @@ class OrderProcessorTest {
 
     @BeforeEach
     void setup() {
-        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        var orderProcessorService = new OrderProcessorService(meterRegistry);
-        orderProcessor = new OrderProcessor(orderProcessorService, repository);
+        var meterRegistry = new SimpleMeterRegistry();
+        var logger = new OrderProcessorLogger();
+        var orderProcessorService = new OrderProcessorService(meterRegistry, logger);
+        orderProcessor = new OrderProcessor(orderProcessorService, repository, logger);
     }
 
     @Test

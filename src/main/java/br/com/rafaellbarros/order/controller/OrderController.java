@@ -19,7 +19,7 @@ public class OrderController {
     private final OrderService orderService;
 
     @PostMapping
-    public ResponseEntity<Order> receive(final @RequestBody @Valid Order request) {
+    public ResponseEntity<Order> createOrder(final @RequestBody @Valid Order request) {
         var createdOrder = orderService.createOrder(request);
         return ResponseEntity
                 .created(URI.create("/v1/orders/" + createdOrder.getId()))
